@@ -80,3 +80,54 @@ Swagger UI：​http://127.0.0.1:8000/docs
 ReDoc：​http://127.0.0.1:8000/redoc
 
 OpenAPI Schema：​http://127.0.0.1:8000/openapi.json​
+
+
+# 从amap_client.py中的实现
+- 使用URL连接：`AMAP_MCP_URL = "https://mcp-e7501f2d-826a-4be5.api-inference.modelscope.cn/sse"`
+- 通过`sse_client`建立连接：
+  ```python
+  self._streams_context = sse_client(url=self.server_url)
+  streams = await self._streams_context.__aenter__()
+  ```
+- 适用于远程服务调用
+- 基于HTTP长连接，支持服务器推送事件到客户端
+
+2. STDIO方式：
+```python
+# 从arxiv_tool/main.py中的实现
+- 使用本地进程通信：
+  ```python
+  server_params = StdioServerParameters(
+      command="uv",
+      args=["tool", "run", "arxiv-mcp-server", "--storage-path", "/Users/zhenghong/Documents/work/mcp/arxiv"],
+      env=None,
+  )
+  ```
+- 通过`stdio_client`建立连接：
+  ```python
+  async with stdio_client(server_params) as (read, write):
+  ```
+- 适用于本地服务调用
+- 基于标准输入输出流通信
+
+主要区别：
+
+1. 连接方式：
+   - SSE：通过HTTP连接远程服务
+   - STDIO：通过进程间通信连接本地服务
+
+2. 使用场景：
+   - SSE：适合调用云端API服务，如高德地图API
+   - STDIO：适合本地工具集成，如论文下载工具
+
+3. 通信机制：
+   - SSE：支持服务器实时推送，适合流式数据传输
+   - STDIO：基于进程标准输入输出，适合本地命令行工具集成
+
+4. 配置差异：
+   - SSE：需要远程服务URL
+   - STDIO：需要本地命令和参数配置
+
+总的来说，这两种方式各有特点，选择哪种方式主要取决于你的使用场景：
+- 如果是调用远程服务，选择SSE方式
+- 如果是集成本地工具，选择STDIO方式
