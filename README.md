@@ -84,3 +84,13 @@ python -m arxiv_tool.main
 1. 确保MCP服务器（arxiv-mcp-server）已经启动并运行
 2. 默认MCP服务器运行在8000端口
 3. 本服务运行在8001端口 
+
+例如，如果你的 FastAPI 应用运行在本地的默认端口（8000），你可以通过以下 URL 访问这些文档：​
+博客园
+
+Swagger UI：​http://127.0.0.1:8000/docs
+
+ReDoc：​http://127.0.0.1:8000/redoc
+
+OpenAPI Schema：​http://127.0.0.1:8000/openapi.json​
+菜鸟教程
