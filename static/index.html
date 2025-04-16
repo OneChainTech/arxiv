@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>arXiv 论文工具</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .result-area {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="flex">
+        <!-- 左侧菜单 -->
+        <div class="w-64 bg-white shadow-md h-screen fixed">
+            <div class="p-4">
+                <h1 class="text-2xl font-bold mb-8">arXiv 论文工具</h1>
+                <nav class="space-y-2">
+                    <button onclick="showSection('search')" class="w-full text-left p-2 rounded hover:bg-gray-100 focus:bg-blue-100">
+                        搜索论文
+                    </button>
+                    <button onclick="showSection('download')" class="w-full text-left p-2 rounded hover:bg-gray-100 focus:bg-blue-100">
+                        下载论文
+                    </button>
+                    <button onclick="showSection('list')" class="w-full text-left p-2 rounded hover:bg-gray-100 focus:bg-blue-100">
+                        论文列表
+                    </button>
+                    <button onclick="showSection('read')" class="w-full text-left p-2 rounded hover:bg-gray-100 focus:bg-blue-100">
+                        阅读论文
+                    </button>
+                </nav>
+            </div>
+        </div>
+
+        <!-- 右侧内容区域 -->
+        <div class="ml-64 flex-1 p-8">
+            <!-- 搜索论文 -->
+            <div id="search" class="section">
+                <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h2 class="text-xl font-semibold mb-4">搜索论文</h2>
+                    <div class="space-y-4">
+                        <input type="text" id="searchQuery" placeholder="输入搜索关键词" class="w-full p-2 border rounded">
+                        <div class="grid grid-cols-2 gap-4">
+                            <input type="date" id="dateFrom" class="p-2 border rounded" placeholder="开始日期">
+                            <input type="date" id="dateTo" class="p-2 border rounded" placeholder="结束日期">
+                        </div>
+                        <input type="number" id="maxResults" value="10" class="w-full p-2 border rounded" placeholder="最大结果数">
+                        <input type="text" id="categories" class="w-full p-2 border rounded" placeholder="类别 (用逗号分隔)">
+                        <button onclick="searchPapers()" class="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600">
+                            搜索
+                        </button>
+                    </div>
+                    <div id="searchResults" class="mt-4 result-area"></div>
+                </div>
+            </div>
+
+            <!-- 下载论文 -->
+            <div id="download" class="section hidden">
+                <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h2 class="text-xl font-semibold mb-4">下载论文</h2>
+                    <div class="space-y-4">
+                        <input type="text" id="paperId" placeholder="输入论文ID" class="w-full p-2 border rounded">
+                        <button onclick="downloadPaper()" class="w-full bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600">
+                            下载
+                        </button>
+                    </div>
+                    <div id="downloadResult" class="mt-4"></div>
+                </div>
+            </div>
+
+            <!-- 论文列表 -->
+            <div id="list" class="section hidden">
+                <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h2 class="text-xl font-semibold mb-4">已下载论文列表</h2>
+                    <button onclick="listPapers()" class="w-full bg-purple-500 text-white py-2 px-4 rounded hover:bg-purple-600 mb-4">
+                        获取列表
+                    </button>
+                    <div id="papersList" class="result-area"></div>
+                </div>
+            </div>
+
+            <!-- 阅读论文 -->
+            <div id="read" class="section hidden">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4">阅读论文</h2>
+                    <div class="space-y-4">
+                        <input type="text" id="readPaperId" placeholder="输入论文ID" class="w-full p-2 border rounded">
+                        <button onclick="readPaper()" class="w-full bg-yellow-500 text-white py-2 px-4 rounded hover:bg-yellow-600">
+                            阅读
+                        </button>
+                    </div>
+                    <div id="paperContent" class="mt-4 result-area"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载遮罩 -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8001';
+
+        // 显示/隐藏加载遮罩
+        function showLoading(show) {
+            const overlay = document.getElementById('loadingOverlay');
+            if (show) {
+                overlay.style.display = 'flex';
+            } else {
+                overlay.style.display = 'none';
+            }
+        }
+
+        // 显示指定部分，隐藏其他部分
+        function showSection(sectionId) {
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.add('hidden');
+            });
+            document.getElementById(sectionId).classList.remove('hidden');
+        }
+
+        // 默认显示搜索部分
+        showSection('search');
+
+        async function searchPapers() {
+            const query = document.getElementById('searchQuery').value;
+            const maxResults = document.getElementById('maxResults').value;
+            const dateFrom = document.getElementById('dateFrom').value;
+            const dateTo = document.getElementById('dateTo').value;
+            const categories = document.getElementById('categories').value.split(',').map(c => c.trim());
+
+            const requestBody = {
+                query,
+                max_results: parseInt(maxResults),
+                categories: categories.filter(c => c)
+            };
+
+            if (dateFrom) {
+                requestBody.date_from = dateFrom;
+            }
+            if (dateTo) {
+                requestBody.date_to = dateTo;
+            }
+
+            showLoading(true);
+            try {
+                const response = await fetch(`${API_BASE_URL}/search`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                const data = await response.json();
+                document.getElementById('searchResults').innerHTML = formatJson(data);
+                showLoading(false);
+            } catch (error) {
+                document.getElementById('searchResults').innerHTML = `<div class="text-red-500">错误: ${error.message}</div>`;
+                showLoading(false);
+            }
+        }
+
+        async function downloadPaper() {
+            const paperId = document.getElementById('paperId').value;
+            showLoading(true);
+            try {
+                const response = await fetch(`${API_BASE_URL}/download`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ paper_id: paperId })
+                });
+                const data = await response.json();
+                document.getElementById('downloadResult').innerHTML = formatJson(data);
+                showLoading(false);
+            } catch (error) {
+                document.getElementById('downloadResult').innerHTML = `<div class="text-red-500">错误: ${error.message}</div>`;
+                showLoading(false);
+            }
+        }
+
+        async function listPapers() {
+            showLoading(true);
+            try {
+                const response = await fetch(`${API_BASE_URL}/papers`);
+                const data = await response.json();
+                document.getElementById('papersList').innerHTML = formatJson(data);
+                showLoading(false);
+            } catch (error) {
+                document.getElementById('papersList').innerHTML = `<div class="text-red-500">错误: ${error.message}</div>`;
+                showLoading(false);
+            }
+        }
+
+        async function readPaper() {
+            const paperId = document.getElementById('readPaperId').value;
+            showLoading(true);
+            try {
+                const response = await fetch(`${API_BASE_URL}/papers/${paperId}`);
+                const data = await response.json();
+                document.getElementById('paperContent').innerHTML = formatJson(data);
+                showLoading(false);
+            } catch (error) {
+                document.getElementById('paperContent').innerHTML = `<div class="text-red-500">错误: ${error.message}</div>`;
+                showLoading(false);
+            }
+        }
+
+        function formatJson(data) {
+            return `<pre class="bg-gray-100 p-4 rounded overflow-x-auto">${JSON.stringify(data, null, 2)}</pre>`;
+        }
+    </script>
+</body>
+</html> 
